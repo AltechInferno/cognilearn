@@ -287,4 +287,24 @@ class MainIndexController extends Controller
         }
     }
 
+
+    public function instructorCoursePaginate(Request $request, $id)
+    {
+        $lastPage = false;
+        $data['courses'] = Course::where('private_mode', '!=', 1)->active()->whereUserId($id)->paginate(3);
+        if($data['courses']->lastPage() == $request->page){
+            $lastPage = true;
+        }
+        $data['topCourse'] = Enrollment::query()
+            ->whereMonth('created_at', now()->month)
+            ->select('course_id', DB::raw('count(*) as total'))
+            ->groupBy('course_id')
+            ->limit(10)
+            ->orderBy('total','desc')
+            ->get()
+            ->pluck('course_id')
+            ->toArray();
+        $response['appendInstructorCourses'] = View::make('frontend.instructor.render-instructor-courses', $data)->render();
+        return response()->json(['status' => true,'data' => $response,'lastPage' => $lastPage]);
+    }
 }
