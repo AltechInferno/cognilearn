@@ -324,4 +324,65 @@ class MainIndexController extends Controller
         ->paginate(12);
         return view('frontend.instructor.all-instructor', $data);
     }
+
+    public function instructor(Request $request)
+    {
+        $data['pageTitle']= "Instructor";
+        $data['categories'] = Category::active()->orderBy('name', 'asc')->select('id', 'name')->get();
+
+        $users = User::query()
+                ->leftJoin('instructors as ins', 'ins.user_id', '=', 'users.id')
+                ->leftJoin('organizations as org', 'org.user_id', '=', 'users.id')
+                ->whereIn('users.role', [USER_ROLE_INSTRUCTOR,USER_ROLE_ORGANIZATION])
+                ->where(function($q){
+                    $q->where('ins.status', STATUS_APPROVED)
+                    ->orWhere('org.status', STATUS_APPROVED);
+                })
+                ->select('users.*', 'ins.organization_id', DB::raw(selectStatement()))
+                ->paginate(12);
+
+        $mapArray = array();
+        foreach($users as $user)
+        {
+            if($user->lat && $user->long){
+                array_push($mapArray, [
+                    'coordinates' => ['long' => $user->long, 'lat' => $user->lat],
+                    "properties" => [
+                        'image' => getImageFile($user->image_path),
+                        'name' => $user->name,
+                        'popup' => view('components.frontend.instructor', ['user' => $user, 'type' => INSTRUCTOR_CARD_TYPE_THREE])->render()
+                    ]
+                ]);
+            }
+        }
+
+        $data['countries'] = Country::all();
+        $data['states'] = State::all();
+        $data['cities'] = City::all();
+        $data['users'] = $users;
+        $data['mapData'] = $mapArray;
+
+
+        $priceMax = User::query()
+        ->leftJoin('instructors as ins', 'ins.user_id', '=', 'users.id')
+        ->leftJoin('organizations as org', 'org.user_id', '=', 'users.id')
+        ->whereIn('users.role', [USER_ROLE_INSTRUCTOR,USER_ROLE_ORGANIZATION])
+        ->where(function($q){
+            $q->where('ins.status', STATUS_APPROVED)
+            ->orWhere('org.status', STATUS_APPROVED);
+        })
+        ->selectRaw('MAX(case when org.id is null then ins.hourly_rate else org.hourly_rate end) AS hourly_rate')
+        ->first();
+
+        $data['priceMax'] = $priceMax ? $priceMax->hourly_rate : 0;
+
+        return view('frontend.instructor.instructor', $data);
+    }
+
+    public function filterInstructor(Request $request)
+    {
+        $data = $this->filterQuery($request);
+        $data['html'] = view('frontend.instructor.render_instructor', $data)->render();
+        return $data;
+    }
 }
