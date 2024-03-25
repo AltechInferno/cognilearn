@@ -191,4 +191,34 @@ class MainIndexController extends Controller
         return view('frontend.faq', $data);
     }
 
+    public function instructorDetails($id, $slug)
+    {
+        $data['pageTitle'] = 'Instructor Details';
+        $data['userInstructor'] = User::query()
+            ->with(['followings', 'followers', 'instructor'])
+            ->where('role', USER_ROLE_INSTRUCTOR)
+            ->findOrFail($id);
+        $data['courses'] = Course::where('private_mode', '!=', 1)->active()->whereUserId($id)->paginate(6);
+        $data['topCourse'] = Enrollment::query()
+                ->whereMonth('created_at', now()->month)
+                ->select('course_id', DB::raw('count(*) as total'))
+                ->groupBy('course_id')
+                ->limit(10)
+                ->orderBy('total','desc')
+                ->get()
+                ->pluck('course_id')
+                ->toArray();
+        $data['loadMoreButtonShowCourses'] = Course::where('private_mode', '!=', 1)->active()->whereUserId($id)->paginate(7);
+        $data['average_rating'] = getUserAverageRating($id);
+        $courseIds = Course::where('private_mode', '!=', 1)->where('user_id', $id)->where('status', 1)->pluck('id')->toArray();
+        $data['total_rating'] = Review::whereIn('course_id', $courseIds)->count();
+
+        $data['total_assignments'] = Assignment::whereIn('course_id', $courseIds)->count();
+        $data['total_lectures'] = Course_lecture::whereIn('course_id', $courseIds)->count();
+        $data['total_quizzes'] = Exam::whereIn('course_id', $courseIds)->count();
+        $data['badge'] = RankingLevel::select('from', 'to', 'type', 'name', 'badge_image')->get();
+        return view('frontend.instructor.instructor-details', $data);
+    }
+
+
 }
