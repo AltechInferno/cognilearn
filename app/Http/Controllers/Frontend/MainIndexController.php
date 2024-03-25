@@ -221,4 +221,49 @@ class MainIndexController extends Controller
     }
 
 
+    public function userProfile(User $user)
+    {
+        if($user->role != USER_ROLE_INSTRUCTOR && $user->role != USER_ROLE_ORGANIZATION){
+            abort(404);
+        }
+
+        $userRelation = getUserRoleRelation($user);
+
+        $user->with('followings', 'followers', $userRelation, 'badges');
+        $data['courses'] = Course::where('private_mode', '!=', 1)->active()->whereUserId($user->id)->paginate(3);
+        $data['topCourse'] = Enrollment::query()
+                ->whereMonth('created_at', now()->month)
+                ->select('course_id', DB::raw('count(*) as total'))
+                ->groupBy('course_id')
+                ->limit(10)
+                ->orderBy('total','desc')
+                ->get()
+                ->pluck('course_id')
+                ->toArray();
+        $data['average_rating'] = getUserAverageRating($user->id);
+        $courseIds = Course::where('private_mode', '!=', 1)->where('user_id', $user->id)->where('status', 1)->select('id')->pluck('id')->toArray();
+        $data['total_rating'] = Review::whereIn('course_id', $courseIds)->count();
+        $data['totalStudent'] = Enrollment::where('owner_user_id', $user->id)->groupBy('user_id')->count();
+        $data['totalMeeting'] = Enrollment::where('owner_user_id', $user->id)->whereNull('consultation_slot_id')->count();
+        $data['total_assignments'] = Assignment::whereIn('course_id', $courseIds)->count();
+        $data['total_lectures'] = Course_lecture::whereIn('course_id', $courseIds)->count();
+        $data['total_quizzes'] = Exam::whereIn('course_id', $courseIds)->count();
+        $data['user'] = $user;
+        if($user->role == USER_ROLE_INSTRUCTOR){
+            $data['pageTitle'] = __('About Instructor');
+        }
+        elseif($user->role == USER_ROLE_ORGANIZATION){
+            $data['pageTitle'] = __('About Organization');
+        }
+        elseif($user->role == USER_ROLE_STUDENT){
+            $data['pageTitle'] = __('About Student');
+        }
+        if($data['user']->role == USER_ROLE_ORGANIZATION){
+            $data['instructors'] = User::join('instructors as ins', 'ins.user_id', '=', 'users.id')->where('ins.status', STATUS_APPROVED)->where('organization_id', $data['user']->organization->id)->select('*', 'users.id')->paginate(3);
+            $data['consultationInstructors'] = User::join('instructors as ins', 'ins.user_id', '=', 'users.id')->where('ins.status', STATUS_APPROVED)->where('ins.consultation_available', STATUS_APPROVED)->where('organization_id', $data['user']->organization->id)->select('*', 'users.id')->paginate(3);
+        }
+
+        return view('frontend.user-details', $data);
+    }
+
 }
