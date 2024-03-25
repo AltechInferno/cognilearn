@@ -585,4 +585,28 @@ class MainIndexController extends Controller
         return view('frontend.cookie-policy', $data);
     }
 
+
+    public function refundPolicy()
+    {
+        $data['pageTitle'] = "Refund Policy";
+        $data['metaData'] = staticMeta(14);
+        $data['policy'] = Policy::whereType(4)->first();
+
+        return view('frontend.refund-policy', $data);
+    }
+
+    public function comingSoon()
+    {
+        $data['pageTitle'] = get_option('coming_soon_title');
+        $data['pageDescription'] = get_option('coming_soon_description');
+        $data['comingSoonDate'] = get_option('coming_soon_date');
+        return view('zainiklab.coming-soon', $data);
+    }
+
+    public function getUserProfile(Request $request)
+    {
+        $user = User::find($request->id)->only(['id', 'name', 'image']);
+        return response()->json(['user' => $user], 200);
+    }
+
 }
