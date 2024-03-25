@@ -307,4 +307,21 @@ class MainIndexController extends Controller
         $response['appendInstructorCourses'] = View::make('frontend.instructor.render-instructor-courses', $data)->render();
         return response()->json(['status' => true,'data' => $response,'lastPage' => $lastPage]);
     }
+
+
+    public function allInstructor()
+    {
+        $data['pageTitle'] = "All Instructor";
+        $data['instructors'] = User::query()
+        ->leftJoin('instructors as ins', 'ins.user_id', '=', 'users.id')
+        ->leftJoin('organizations as org', 'org.user_id', '=', 'users.id')
+        ->whereIn('users.role', [USER_ROLE_INSTRUCTOR,USER_ROLE_ORGANIZATION])
+        ->where(function($q){
+            $q->where('ins.status', STATUS_APPROVED)
+            ->orWhere('org.status', STATUS_APPROVED);
+        })
+        ->select('users.*', 'ins.organization_id', DB::raw(selectStatement()))
+        ->paginate(12);
+        return view('frontend.instructor.all-instructor', $data);
+    }
 }
