@@ -183,4 +183,12 @@ class MainIndexController extends Controller
         return response()->json($response);
     }
 
+    public function faq()
+    {
+        $data['pageTitle'] = 'FAQ';
+        $data['metaData'] = staticMeta(12);
+        $data['faqs'] = FaqQuestion::all();
+        return view('frontend.faq', $data);
+    }
+
 }
