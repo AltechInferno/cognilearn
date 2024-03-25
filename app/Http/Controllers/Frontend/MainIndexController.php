@@ -161,5 +161,13 @@ class MainIndexController extends Controller
         return view('frontend.about', $data);
     }
 
+    public function contactUs()
+    {
+        $data['pageTitle'] = 'Contact Us';
+        $data['metaData'] = staticMeta(8);
+        $data['contactUsIssues'] = ContactUsIssue::all();
+        return view('frontend.contact', $data);
+    }
+
 
 }
