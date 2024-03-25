@@ -385,4 +385,178 @@ class MainIndexController extends Controller
         $data['html'] = view('frontend.instructor.render_instructor', $data)->render();
         return $data;
     }
+
+
+    public function filterQuery($request){
+        $users = User::query()
+                ->leftJoin('instructors as ins', 'ins.user_id', '=', 'users.id')
+                ->leftJoin('organizations as org', 'org.user_id', '=', 'users.id')
+                ->whereIn('users.role', [USER_ROLE_INSTRUCTOR,USER_ROLE_ORGANIZATION])
+                ->where(function($q){
+                    $q->where('ins.status', STATUS_APPROVED)
+                    ->orWhere('org.status', STATUS_APPROVED);
+                });
+
+        if($request->available_for_meeting){
+            $users->where(function($q) use($request){
+                $q->where('ins.consultation_available', 1);
+                $q->orWhere('org.consultation_available', 1);
+            });
+        }
+
+        if($request->free_meeting){
+            $users->where(function($q) use($request){
+                if(!$request->available_for_meeting){
+                    $q->where('ins.consultation_available', 1);
+                    $q->orWhere('org.consultation_available', 1);
+                }
+            });
+            $users->where(function($q){
+                $q->where('ins.hourly_rate', 0);
+                $q->orWhere('org.hourly_rate', 0);
+            });
+        }
+
+        if($request->discount_meeting){
+            $users->where(function($q) use($request){
+                if(!$request->available_for_meeting){
+                    $q->where('ins.consultation_available', 1);
+                    $q->orWhere('org.consultation_available', 1);
+                }
+
+            });
+            $users->where(function($q){
+               $q->whereColumn('ins.hourly_rate', '<', 'ins.hourly_old_rate');
+               $q->orWhereColumn('org.hourly_rate', '<', 'org.hourly_old_rate');
+            });
+        }
+
+        if($request->country_id){
+            $users->where(function($q) use($request){
+                $q->where('ins.country_id', $request->country_id)
+                ->orWhere('org.country_id', $request->country_id);
+            });
+        }
+
+        if($request->state_id){
+            $users->where(function($q) use($request){
+                $q->where('ins.state_id', $request->state_id)
+                ->orWhere('org.state_id', $request->state_id);
+            });
+        }
+
+        if($request->city_id){
+            $users->where(function($q) use($request){
+                $q->where('ins.city_id', $request->city_id)
+                ->orWhere('org.city_id', $request->city_id);
+            });
+        }
+
+        if($request->available_type){
+            $users->where(function($q) use($request){
+                $q->where('ins.available_type', $request->available_type)
+                ->orWhere('org.available_type', $request->available_type);
+            });
+        }
+
+        if(is_array($request->consultation_day)){
+            $users->leftJoin('instructor_consultation_day_statuses as icds', 'icds.user_id', '=', 'users.id');
+            $users->whereIn('icds.day', $request->consultation_day);
+        }
+
+        if(is_array($request->category_ids)){
+            $users->leftJoin('courses', 'courses.user_id', '=', 'users.id');
+            $users->whereIn('courses.category_id', $request->category_ids);
+        }
+
+        if(is_array($request->rating)){
+            $min = min($request->rating);
+            $max = max($request->rating);
+            $users->leftJoin(DB::raw('(select users.id, avg(c.average_rating) as avg_rating
+            from
+                users
+            join instructors i on
+                i.user_id = users.id
+            join courses c on
+                c.user_id = users.id and c.average_rating > 0
+                group by users.id) as average_table'), 'average_table.id', '=', 'users.id')
+            ->whereBetween('average_table.avg_rating', [$min, $max]);
+        }
+
+        $users->where(function($q) use($request){
+            $q->whereBetween('ins.hourly_rate', [$request->price_min, $request->price_max])
+            ->orWhereBetween('org.hourly_rate', [$request->price_min, $request->price_max]);
+        });
+
+        if($request->sort_by){
+            $users->orderBy('users.created_at', $request->sort_by);
+        }
+        else{
+            $users->orderBy('users.created_at', 'ASC');
+        }
+
+        $users->groupBy('users.id');
+        $users = $users->select('users.id', 'users.name', 'users.email', 'users.area_code', 'users.mobile_number', 'users.role', 'users.phone_number', 'users.lat', 'users.long', 'users.image', 'users.avatar', 'users.created_at', 'users.is_affiliator', 'users.balance', 'ins.organization_id', DB::raw(selectStatement()))->paginate(12);
+
+        $mapArray = array();
+        foreach($users as $user)
+        {
+            if($user->lat && $user->long){
+                array_push($mapArray, [
+                    'coordinates' => ['long' => $user->long, 'lat' => $user->lat],
+                    "properties" => [
+                        'image' => getImageFile($user->image_path),
+                        'name' => $user->name,
+                        'popup' => view('components.frontend.instructor', ['user' => $user, 'type' => INSTRUCTOR_CARD_TYPE_THREE])->render()
+                    ]
+                ]);
+            }
+        }
+
+        $data['users'] = $users;
+        $data['mapData'] = $mapArray;
+
+        return  $data;
+    }
+
+    public function instructorMore(Request $request){
+        $lastPage = false;
+        $data = $this->filterQuery($request);
+
+        if($data['users']->lastPage() == $request->page){
+            $lastPage = true;
+        }
+
+        $data['lastPage'] = $lastPage;
+        $data['html'] = View::make('frontend.instructor.render-organization-instructors', ['users' => $data['users']])->render();
+        $data['status'] = true;
+        return response()->json($data);
+    }
+
+    public function organizationDetails($id, $slug)
+    {
+        $data['pageTitle'] = 'Organization Details';
+        $data['userOrganization'] = User::findOrFail($id);
+        $data['courses'] = Course::where('private_mode', '!=', 1)->active()->whereUserId($id)->paginate(6);
+        $data['loadMoreButtonShowCourses'] = Course::where('private_mode', '!=', 1)->active()->whereUserId($id)->paginate(7);
+        $data['average_rating'] = getUserAverageRating($id);
+        $courseIds = Course::where('private_mode', '!=', 1)->where('user_id', $id)->where('status', 1)->pluck('id')->toArray();
+        $data['total_rating'] = Review::whereIn('course_id', $courseIds)->count();
+        $data['instructors'] = Instructor::approved()->paginate(3);
+        $data['consultationInstructors'] = Instructor::approved()->consultationAvailable()->take(8)->get();
+        $data['total_assignments'] = Assignment::whereIn('course_id', $courseIds)->count();
+        $data['total_lectures'] = Course_lecture::whereIn('course_id', $courseIds)->count();
+        $data['total_quizzes'] = Exam::whereIn('course_id', $courseIds)->count();
+        $data['topCourse'] = Enrollment::query()
+        ->whereMonth('created_at', now()->month)
+        ->select('course_id', DB::raw('count(*) as total'))
+        ->groupBy('course_id')
+        ->limit(10)
+        ->orderBy('total','desc')
+        ->get()
+        ->pluck('course_id')
+        ->toArray();
+        return view('frontend.organizations.view', $data);
+    }
+
 }
