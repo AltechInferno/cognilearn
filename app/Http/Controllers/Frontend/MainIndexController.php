@@ -559,4 +559,30 @@ class MainIndexController extends Controller
         return view('frontend.organizations.view', $data);
     }
 
+    public function termConditions()
+    {
+        $data['pageTitle'] = "Terms & Conditions";
+        $data['policy'] = Policy::whereType(3)->first();
+
+        return view('frontend.terms-conditions', $data);
+    }
+
+    public function privacyPolicy()
+    {
+        $data['pageTitle'] = "Privacy Policy";
+        $data['metaData'] = staticMeta(10);
+        $data['policy'] = Policy::whereType(1)->first();
+
+        return view('frontend.privacy-policy', $data);
+    }
+
+    public function cookiePolicy()
+    {
+        $data['pageTitle'] = "Cookie Policy";
+        $data['metaData'] = staticMeta(11);
+        $data['policy'] = Policy::whereType(2)->first();
+
+        return view('frontend.cookie-policy', $data);
+    }
+
 }
