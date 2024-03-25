@@ -170,4 +170,17 @@ class MainIndexController extends Controller
     }
 
 
+    public function contactUsStore(Request $request)
+    {
+        $contact = new ContactUs();
+        $contact->name = $request->name;
+        $contact->email = $request->email;
+        $contact->contact_us_issue_id = $request->contact_us_issue_id;
+        $contact->message = $request->message;
+        $contact->save();
+
+        $response['msg'] = __('Message sent successfully.');
+        return response()->json($response);
+    }
+
 }
