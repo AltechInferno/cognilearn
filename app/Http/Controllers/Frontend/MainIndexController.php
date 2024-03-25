@@ -266,4 +266,25 @@ class MainIndexController extends Controller
         return view('frontend.user-details', $data);
     }
 
+
+    public function moreCourse(Request $request,  $user_id)
+    {
+        $course = Course::where('private_mode', '!=', 1)->active()->where('user_id', $user_id)->paginate(3);
+
+    }
+
+    public function organizationInstructorPaginate(Request $request, User $user)
+    {
+        $data['user'] = $user;
+        if($data['user']->role == USER_ROLE_ORGANIZATION){
+            $lastPage = false;
+            $data['instructors'] = Instructor::where('organization_id', $data['user']->organization->id)->approved()->paginate(3);
+            if($data['instructors']->lastPage() == $request->page){
+                $lastPage = true;
+            }
+            $response['appendOrganizationInstructors'] = View::make('frontend.instructor.render-organization-instructors', $data)->render();
+            return response()->json(['status' => true,'data' => $response, 'lastPage' => $lastPage]);
+        }
+    }
+
 }
