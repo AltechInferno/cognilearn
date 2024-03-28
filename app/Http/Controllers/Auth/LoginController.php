@@ -137,4 +137,36 @@ class LoginController extends Controller
         return redirect("login");
     }
 
+
+         /**
+     * Log the user out of the application.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\RedirectResponse|\Illuminate\Http\JsonResponse
+     */
+    public function logout(Request $request)
+    {
+        //remove device tracking session
+        if(get_option('device_control')){
+            $device_uuid = $request->cookie('_uuid_d');
+            Cookie::queue(Cookie::forget('_uuid_d'));
+            Device::join('device_user', 'devices.id', '=', 'device_user.device_id')->where('devices.device_uuid', $device_uuid)->update(['deleted_at' => now()]);
+        }
+
+        $this->guard()->logout();
+
+        $request->session()->invalidate();
+
+        $request->session()->regenerateToken();
+
+
+        if ($response = $this->loggedOut($request)) {
+            return $response;
+        }
+
+        return $request->wantsJson()
+            ? new JsonResponse([], 204)
+            : redirect('/');
+    }
+
 }
